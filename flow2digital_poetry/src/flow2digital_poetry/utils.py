@@ -234,6 +234,7 @@ def infer_flowmind2digital(img_path):
     :param img_path: image path
     :return: pred, edge,
     """
+    print("Predicting diagram from image:", img_path)
     bbox, cls, kpt, siz = model(img_path=img_path, opt=0)  # pre0/ dataset1
 
     pred = get_pred(bbox, cls)  # get autoshape's bbox and cls

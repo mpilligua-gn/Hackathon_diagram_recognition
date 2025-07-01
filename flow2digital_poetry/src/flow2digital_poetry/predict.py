@@ -108,7 +108,10 @@ class predict_mode:
 
     def dataset_register(self, dataset_path):
         for i, d in enumerate(['train', 'eval']):
-            DatasetCatalog.register('arrow_' + d, lambda d=d: self.get_arrow_dicts(dataset_path[i]))
+            try:
+                DatasetCatalog.register('arrow_' + d, lambda d=d: self.get_arrow_dicts(dataset_path[i]))
+            except Exception as e:
+                pass
             MetadataCatalog.get('arrow_' + d).set(thing_classes=['{}'.format(categ) for categ in self.category.keys()])
         MetadataCatalog.get("arrow_train").keypoint_names = self.keypoint_names
         MetadataCatalog.get("arrow_train").keypoint_flip_map = self.keypoint_flip_map

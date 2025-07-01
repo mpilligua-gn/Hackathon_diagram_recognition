@@ -7,10 +7,10 @@ app = Flask(__name__)
 @app.route("/process_diagram", methods=["POST"])
 def process_diagram():
     data = request.get_json()
-    image = data.get("image", None)
+    image = data.get("image_path", None)
 
     # ensure the image exists
-    if image is None or not os.path.exists(image):
+    if not os.path.exists(image):
         return jsonify({"error": "Image file does not exist"}), 401
 
     shapes, edges = infer_flowmind2digital(image)
