@@ -1,0 +1,23 @@
+[project]
+name = "flow2digital-poetry"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Your Name",email = "you@example.com"}
+]
+readme = "README.md"
+requires-python = "^3.9"
+dependencies = [
+    "numpy (==1.26.4)",
+    "scikit-learn (>=1.2.2,<2.0.0)",
+    "opencv-python (>=4.11.0.86,<5.0.0.0)",
+    "torchvision (==0.17.2)"
+]
+
+[tool.poetry]
+packages = [{include = "flow2digital_poetry", from = "src"}]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
