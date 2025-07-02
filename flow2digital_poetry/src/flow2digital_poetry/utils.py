@@ -1,9 +1,16 @@
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 import numpy as np
 from sklearn.cluster import KMeans
 import math
 import random
 from predict import predict_mode
 from units import geometry
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+import numpy as np
+from PIL import Image, ImageDraw, ImageFont
+
 
 class Canopy:
     def __init__(self, dataset):
@@ -54,6 +61,7 @@ class Canopy:
             k += 1
         return k
 
+
 def clustering(X, t1=1.5, t2=0.5, dim=1):
     """
     :param: Cluster the instances in one-dimensional feature vector X that have a value less than t2 into one category (NumPy or a list).
@@ -80,6 +88,7 @@ def clustering(X, t1=1.5, t2=0.5, dim=1):
         ret[i] = avg[y]
     return ret
 
+
 def align(pred):
     """
     :param pred: boundingbox
@@ -103,6 +112,7 @@ def align(pred):
         pred[:, i] = x.reshape(-1)
     return pred.tolist()
 
+
 def adjust_shape(pred):
     X = np.zeros((len(pred), 2))
     t2 = 1e18
@@ -122,6 +132,7 @@ def adjust_shape(pred):
         box[1] = midy - X[i][1] / 2
         box[3] = midy + X[i][1] / 2
     return pred
+
 
 def model(img_path, opt=0):
     """
@@ -149,7 +160,8 @@ def model(img_path, opt=0):
     siz = predict_output.image_size
     return bbox, cls, kpt, siz
 
-def get_pred(bbox, cls):
+
+def get_shapes(bbox, cls):
     ret = list()
     for i, x in enumerate(cls):
         if x >= 8:
@@ -159,21 +171,17 @@ def get_pred(bbox, cls):
         ret.append(tmp)
     return ret
 
-def get_edge(kpt, cls):
+
+def get_edges(bbox, cls):
     ret = list()
     for i, x in enumerate(cls):
-        """
-        'arrow': 9,
-        'double_arrow': 10,
-        'line': 11
-        """
-        if x < 9:
+        if x <= 8:
             continue
-        tmp = np.reshape(kpt[i], -1)
-        tmp = tmp.tolist()
+        tmp = bbox[i].tolist()
         tmp.append(x)
         ret.append(tmp)
     return ret
+
 
 def find_closest_shape(pred, x, y):
     """
@@ -187,13 +195,15 @@ def find_closest_shape(pred, x, y):
     sp = -1
     d = -1
     for i, shape in enumerate(pred):
-        dis, direction = geometry.calc(x, y, shape)  # Calculate the index of the key point on the shape that has the minimum distance to y.
+        # Calculate the index of the key point on the shape that has the minimum distance to y.
+        dis, direction = geometry.calc(x, y, shape)
         if dis < mxdis:
             mxdis = dis
             op = 1   # """Set the threshold for the minimum distance."""
             sp = i
             d = direction
     return op, sp, d
+
 
 def build_graph(pred, edge):
     """
@@ -216,6 +226,7 @@ def build_graph(pred, edge):
         ret.append(cur)
     return ret
 
+
 def ensure_not_empty_bb(pred):
     """
     :param pred: [[xmin, ymin, xmax, ymax, cls], ...]
@@ -226,8 +237,9 @@ def ensure_not_empty_bb(pred):
         if box[2] - box[0] < 0:
             box[2] = box[0] + 1
         if box[3] - box[1] < 0:
-            box[3] = box[1] + 1 
+            box[3] = box[1] + 1
     return pred
+
 
 def infer_flowmind2digital(img_path):
     """
@@ -237,23 +249,132 @@ def infer_flowmind2digital(img_path):
     print("Predicting diagram from image:", img_path)
     bbox, cls, kpt, siz = model(img_path=img_path, opt=0)  # pre0/ dataset1
 
-    pred = get_pred(bbox, cls)  # get autoshape's bbox and cls
-    edge = get_edge(kpt, cls)  # get connector's bbox and cls
+    shapes = get_shapes(bbox, cls)  # get autoshape's bbox and cls
+    edges = get_edges(bbox, cls)  # get connector's bbox and cls
+    shapes = to_python_floats(shapes)
+    edges = to_python_floats(edges)
+    return shapes, edges
 
-    edge = build_graph(pred, edge)  # build edge
-    
-    pred = align(pred)
-    pred = adjust_shape(pred)  # resizing
-
-    pred = to_python_floats(pred)  # convert to python float for visualization
-    edge = to_python_floats(edge)  # convert to python float for visualization
-
-    return pred, edge
 
 def to_python_floats(matrix):
     return [[float(x) for x in row] for row in matrix]
 
+
+# Shape mapping
+shape_map = {
+    0: 'circle', 1: 'diamonds', 2: 'long_oval', 3: 'hexagon',
+    4: 'parallelogram', 5: 'rectangle', 6: 'trapezoid', 7: 'triangle',
+    8: 'text', 9: 'arrow', 10: 'double_arrow', 11: 'line'
+}
+
+
+def to_inches(val):
+    return val / 96.0
+
+
+def draw_shape(ax, shape_type, center, width, height):
+    cx, cy = center
+    if shape_type == 'circle':
+        ax.add_patch(mpatches.Circle((cx, cy), radius=width/2, edgecolor='blue', facecolor='none', lw=2))
+    elif shape_type == 'diamonds':
+        ax.add_patch(mpatches.RegularPolygon((cx, cy), numVertices=4, radius=width/np.sqrt(2),
+                     orientation=np.pi/4, edgecolor='blue', facecolor='none', lw=2))
+    elif shape_type == 'long_oval':
+        ax.add_patch(mpatches.Ellipse((cx, cy), width=width, height=height, edgecolor='blue', facecolor='none', lw=2))
+    elif shape_type == 'hexagon':
+        ax.add_patch(mpatches.RegularPolygon((cx, cy), numVertices=6,
+                     radius=width/2, edgecolor='blue', facecolor='none', lw=2))
+    elif shape_type == 'parallelogram':
+        ax.add_patch(mpatches.Polygon([[cx - width/2, cy - height/2],
+                                       [cx + width/2, cy - height/2],
+                                       [cx + width/2 - width/4, cy + height/2],
+                                       [cx - width/2 - width/4, cy + height/2]],
+                                      closed=True, edgecolor='blue', facecolor='none', lw=2))
+    elif shape_type == 'rectangle':
+        ax.add_patch(mpatches.Rectangle((cx - width/2, cy - height/2), width,
+                     height, edgecolor='blue', facecolor='none', lw=2))
+    elif shape_type == 'trapezoid':
+        ax.add_patch(mpatches.Polygon([[cx - width/2 + width/4, cy - height/2],
+                                       [cx + width/2 - width/4, cy - height/2],
+                                       [cx + width/2, cy + height/2],
+                                       [cx - width/2, cy + height/2]],
+                                      closed=True, edgecolor='blue', facecolor='none', lw=2))
+    elif shape_type == 'triangle':
+        ax.add_patch(mpatches.RegularPolygon((cx, cy), numVertices=3, radius=width /
+                     2, orientation=np.pi, edgecolor='blue', facecolor='none', lw=2))
+    elif shape_type == 'text':
+        ax.text(cx, cy, 'Text', ha='center', va='center', fontsize=10, bbox=dict(facecolor='white', edgecolor='blue'))
+    elif shape_type == 'arrow':
+        ax.annotate('', xy=(cx + width/2, cy), xytext=(cx - width/2, cy),
+                    arrowprops=dict(arrowstyle='->', color='blue', lw=2))
+    elif shape_type == 'double_arrow':
+        ax.annotate('', xy=(cx + width/2, cy), xytext=(cx - width/2, cy),
+                    arrowprops=dict(arrowstyle='<->', color='blue', lw=2))
+    elif shape_type == 'line':
+        ax.plot([cx - width/2, cx + width/2], [cy, cy], color='blue', lw=2)
+
+
+def draw_on_image(path, image_path, shapes, edges):
+    # Load image
+    img = Image.open(image_path).convert("RGB")
+    draw = ImageDraw.Draw(img)
+
+    # Try to use a default font
+    try:
+        font = ImageFont.truetype("arial.ttf", 14)
+    except:
+        font = ImageFont.load_default()
+
+    centers = []
+
+    # Draw shapes
+    for i, box in enumerate(shapes):
+        x0, y0 = box[0], box[1]
+        x1, y1 = box[2], box[3]
+        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+        shape_type = shape_map.get(int(box[4]), 'rectangle')
+
+        if shape_type == 'rectangle':
+            draw.rectangle([x0, y0, x1, y1], outline="blue", width=2)
+        elif shape_type == 'circle':
+            draw.ellipse([x0, y0, x1, y1], outline="blue", width=2)
+        elif shape_type == 'long_oval':
+            draw.ellipse([x0, y0, x1, y1], outline="blue", width=2)
+        elif shape_type == 'diamonds':
+            draw.polygon([(cx, y0), (x1, cy), (cx, y1), (x0, cy)], outline="blue")
+        elif shape_type == 'hexagon':
+            w, h = x1 - x0, y1 - y0
+            draw.polygon([
+                (cx - w / 2, cy),
+                (cx - w / 4, y0),
+                (cx + w / 4, y0),
+                (cx + w / 2, cy),
+                (cx + w / 4, y1),
+                (cx - w / 4, y1),
+            ], outline="blue")
+        elif shape_type == 'triangle':
+            draw.polygon([(cx, y0), (x1, y1), (x0, y1)], outline="blue")
+        else:
+            draw.rectangle([x0, y0, x1, y1], outline="blue", width=2)
+
+        draw.text((cx, cy), str(i), fill="red", font=font, anchor="mm")
+        centers.append((cx, cy))
+
+    # Draw connectors as lines with arrowheads
+    for i, box in enumerate(edges):
+        x0, y0 = box[0], box[1]
+        x1, y1 = box[2], box[3]
+        draw.rectangle([x0, y0, x1, y1], outline="red", width=2)
+
+    img.save(path)
+    return path
+
+
 if __name__ == "__main__":
-    img_path = "/Users/maria/projects/hackathon_diagram_recognition/flowmind2digital/data/handwritten-diagram-datasets/datasets/fca/test/writer5_4b.png"  # Path to your image
-    pred, edge = infer_flowmind2digital(img_path)
+    img_path = "/home/anh/diagram_recognition/Hackathon_diagram_recognition/flow2digital_poetry/test_1.jpg"  # Path to your image
+    shapes, edges = infer_flowmind2digital(img_path)
+    draw_on_image(
+        "/home/anh/diagram_recognition/Hackathon_diagram_recognition/flow2digital_poetry/test_result.png", img_path, shapes, edges)
     print("Inference completed")
+    print("Shapes:", shapes)
+    print("Edges:", edges)

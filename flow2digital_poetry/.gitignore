@@ -1,0 +1,9 @@
+# Ignore compiled Python files and cache directories
+*.pyc
+__pycache__/
+
+# Ignore checkpoints or test outputs
+ckpt/
+*.jpg
+*.png
+output/
