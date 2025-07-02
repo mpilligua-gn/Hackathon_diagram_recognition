@@ -241,12 +241,100 @@ def ensure_not_empty_bb(pred):
     return pred
 
 
+def normalize_points(points, image_size=1000, padding=20):
+    strokes = [np.array(stroke) for stroke in points]
+    # get min and max points
+    pts = np.concatenate(strokes, axis=0)
+
+    # Get bounds
+    min_x, min_y = pts.min(axis=0)
+    max_x, max_y = pts.max(axis=0)
+    width = max_x - min_x
+    height = max_y - min_y
+
+    # Avoid division by zero
+    if width == 0:
+        width = 1
+    if height == 0:
+        height = 1
+
+    # Scale to fit inside (image_size - padding*2)
+    scale = min((image_size - 2 * padding) / width,
+                (image_size - 2 * padding) / height)
+
+    if scale > 1:
+        # If the scale is greater than 1, we can use the original size
+        scale = 1
+
+    normalized = []
+    for stroke in strokes:
+        norm_stroke = [
+            ((np.array(p) - np.array([min_x, min_y])) * scale + padding).tolist()
+            for p in stroke
+        ]
+        normalized.append(norm_stroke)
+
+    return normalized, min_x, min_y, scale, padding
+
+
+def draw_handwriting(norm_points, image_size=1000, save_path="handwriting.png"):
+
+    img = Image.new("RGB", (image_size, image_size), "white")
+    draw = ImageDraw.Draw(img)
+
+    # Draw lines between points
+    for stroke in norm_points:
+        if len(stroke) < 2:
+            continue
+        for i in range(len(stroke) - 1):
+            draw.line([tuple(stroke[i]), tuple(stroke[i + 1])], fill="black", width=2)
+
+    img.save(save_path)
+    return save_path
+
+
+def infer_from_handwriting_points(handwriting):
+    """
+    :param img_path: image path
+    :return: pred, edge,
+    """
+    norm_handwriting, min_x, min_y, scale, padding = normalize_points(handwriting, image_size=1000)
+    image_path = draw_handwriting(norm_handwriting, image_size=1000)
+    shapes, edges = infer_flowmind2digital(image_path)
+    # Adjust shapes and edges based on the handwriting points
+    for shape in shapes:
+        shape[0] = (shape[0] - padding)/scale
+        shape[1] = (shape[1] - padding)/scale
+        shape[2] = (shape[2] - padding)/scale
+        shape[3] = (shape[3] - padding)/scale
+
+        shape[0] = (shape[0] + min_x)
+        shape[1] = (shape[1] + min_y)
+        shape[2] = (shape[2] + min_x)
+        shape[3] = (shape[3] + min_y)
+    for edge in edges:
+        edge[0] = (edge[0] - padding)/scale
+        edge[1] = (edge[1] - padding)/scale
+        edge[2] = (edge[2] - padding)/scale
+        edge[3] = (edge[3] - padding)/scale
+
+        edge[0] = (edge[0] + min_x)
+        edge[1] = (edge[1] + min_y)
+        edge[2] = (edge[2] + min_x)
+        edge[3] = (edge[3] + min_y)
+
+    image_path = draw_handwriting(
+        handwriting, image_size=1000, save_path='handwriting_result.png')
+    draw_on_image('handwriting_shape_result.png', image_path, shapes, edges)
+    return shapes, edges
+
+
 def infer_flowmind2digital(img_path):
     """
     :param img_path: image path
     :return: pred, edge,
     """
-    print("Predicting diagram from image:", img_path)
+    print("Infer flowmind2digital from image:", img_path)
     bbox, cls, kpt, siz = model(img_path=img_path, opt=0)  # pre0/ dataset1
 
     shapes = get_shapes(bbox, cls)  # get autoshape's bbox and cls
@@ -265,6 +353,8 @@ shape_map = {
     0: 'circle', 1: 'diamonds', 2: 'long_oval', 3: 'hexagon',
     4: 'parallelogram', 5: 'rectangle', 6: 'trapezoid', 7: 'triangle',
     8: 'text', 9: 'arrow', 10: 'double_arrow', 11: 'line'
+
+
 }
 
 

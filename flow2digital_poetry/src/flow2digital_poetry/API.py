@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-from utils import infer_flowmind2digital
+from utils import infer_from_handwriting_points
 import os
 
 app = Flask(__name__)
@@ -8,16 +8,14 @@ app = Flask(__name__)
 @app.route("/process_diagram", methods=["POST"])
 def process_diagram():
     data = request.get_json()
-    image = data.get("image_path", None)
-
+    data = request.get_json()
+    handwriting = data.get("handwriting", [])
     # ensure the image exists
-    if not os.path.exists(image):
-        return jsonify({"error": "Image file does not exist"}), 401
+    if len(handwriting) == 0:
+        return jsonify({"error": "empty handwriting"}), 401
 
-    shapes, edges = infer_flowmind2digital(image)
-    print("Shapes:", shapes)
-    print("Edges:", edges)
-    if image is None:
+    shapes, edges = infer_from_handwriting_points(handwriting)
+    if handwriting is None:
         return jsonify({"error": "No image provided"}), 400
 
     return jsonify({
