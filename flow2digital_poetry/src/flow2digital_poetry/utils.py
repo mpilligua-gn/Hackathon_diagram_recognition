@@ -183,6 +183,17 @@ def get_edges(bbox, cls):
     return ret
 
 
+def get_texts(bbox, cls):
+    ret = list()
+    for i, x in enumerate(cls):
+        if x != 8:
+            continue
+        tmp = bbox[i].tolist()
+        tmp.append(x)
+        ret.append(tmp)
+    return ret
+
+
 def find_closest_shape(pred, x, y):
     """
     :param pred: all autoshape[xmin, ymin, xmax, ymax, cls]
@@ -300,7 +311,7 @@ def infer_from_handwriting_points(handwriting):
     """
     norm_handwriting, min_x, min_y, scale, padding = normalize_points(handwriting, image_size=1000)
     image_path = draw_handwriting(norm_handwriting, image_size=1000)
-    shapes, edges = infer_flowmind2digital(image_path)
+    shapes, edges, texts = infer_flowmind2digital(image_path)
     # Adjust shapes and edges based on the handwriting points
     for shape in shapes:
         shape[0] = (shape[0] - padding)/scale
@@ -323,10 +334,21 @@ def infer_from_handwriting_points(handwriting):
         edge[2] = (edge[2] + min_x)
         edge[3] = (edge[3] + min_y)
 
+    for text in texts:
+        text[0] = (text[0] - padding)/scale
+        text[1] = (text[1] - padding)/scale
+        text[2] = (text[2] - padding)/scale
+        text[3] = (text[3] - padding)/scale
+
+        text[0] = (text[0] + min_x)
+        text[1] = (text[1] + min_y)
+        text[2] = (text[2] + min_x)
+        text[3] = (text[3] + min_y)
+
     image_path = draw_handwriting(
         handwriting, image_size=1000, save_path='handwriting_result.png')
-    draw_on_image('handwriting_shape_result.png', image_path, shapes, edges)
-    return shapes, edges
+    draw_on_image('handwriting_shape_result.png', image_path, shapes, edges, texts)
+    return shapes, edges, texts
 
 
 def infer_flowmind2digital(img_path):
@@ -339,9 +361,11 @@ def infer_flowmind2digital(img_path):
 
     shapes = get_shapes(bbox, cls)  # get autoshape's bbox and cls
     edges = get_edges(bbox, cls)  # get connector's bbox and cls
+    texts = get_texts(bbox, cls)  # get text's bbox and cls
     shapes = to_python_floats(shapes)
     edges = to_python_floats(edges)
-    return shapes, edges
+    texts = to_python_floats(texts)
+    return shapes, edges, texts
 
 
 def to_python_floats(matrix):
@@ -404,7 +428,7 @@ def draw_shape(ax, shape_type, center, width, height):
         ax.plot([cx - width/2, cx + width/2], [cy, cy], color='blue', lw=2)
 
 
-def draw_on_image(path, image_path, shapes, edges):
+def draw_on_image(path, image_path, shapes, edges, texts=None):
     # Load image
     img = Image.open(image_path).convert("RGB")
     draw = ImageDraw.Draw(img)
@@ -456,13 +480,21 @@ def draw_on_image(path, image_path, shapes, edges):
         x1, y1 = box[2], box[3]
         draw.rectangle([x0, y0, x1, y1], outline="red", width=2)
 
+    if texts != None:
+        for i, text in enumerate(texts):
+            x0, y0 = text[0], text[1]
+            x1, y1 = text[2], text[3]
+            cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+            draw.rectangle([x0, y0, x1, y1], outline="green", width=2)
+            draw.text((cx, cy), "Text", fill="green", font=font, anchor="mm")
+
     img.save(path)
     return path
 
 
 if __name__ == "__main__":
     img_path = "/home/anh/diagram_recognition/Hackathon_diagram_recognition/flow2digital_poetry/test_1.jpg"  # Path to your image
-    shapes, edges = infer_flowmind2digital(img_path)
+    shapes, edges, texts = infer_flowmind2digital(img_path)
     draw_on_image(
         "/home/anh/diagram_recognition/Hackathon_diagram_recognition/flow2digital_poetry/test_result.png", img_path, shapes, edges)
     print("Inference completed")
